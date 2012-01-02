@@ -31,15 +31,26 @@ parseStatement: true, visitPostorder: true */
 (function (exports) {
     'use strict';
 
+        // constants:
     var Token,
         Syntax,
         Messages,
+        // scoped to parse calls:
         source,
-        index,
-        lineNumber,
         length,
+        sourceName = "",
+        extra,
+        finish,
+        trackingRange = false,
+        trackingLoc = false,
+        tracking = false, // trackingRange || trackingLoc
+        // cursor state:
+        index,
+        lineIndex,
+        lineNumber,
         buffer,
-        extra;
+        lastToken,
+        lookingAhead;
 
     Token = {
         BooleanLiteral: 1,
@@ -98,7 +109,7 @@ parseStatement: true, visitPostorder: true */
         UnexpectedNumber:  'Unexpected number',
         UnexpectedString:  'Unexpected string',
         UnexpectedIdentifier:  'Unexpected identifier',
-        UnexpectedReserved:  'Unexpected reserved word',
+        UnexpectedReserved:  'Unexpected reserved word: %0',
         UnexpectedEOS:  'Unexpected end of input',
         NewlineAfterThrow:  'Illegal newline after throw',
         InvalidRegExp: 'Invalid regular expression',
@@ -220,11 +231,60 @@ parseStatement: true, visitPostorder: true */
         return false;
     }
 
+    // Start, then finish, tracking the range or location of a part
+    function start() {
+        var startLineNumber, startLineIndex, startIndex;
+
+        startLineNumber = lineNumber;
+        startLineIndex = lineIndex;
+        startIndex = index;
+
+        return function (object) {
+            var lastLineNumber, lastLineIndex, lastIndex;
+
+            lastLineNumber = lineNumber;
+            lastLineIndex = lineIndex;
+            lastIndex = index;
+
+            if (trackingRange) {
+                object.range = [startIndex, lastIndex - 1];
+            }
+
+            if (trackingLoc) {
+                object.loc = {
+                    source: sourceName,
+                    start: {
+                        line: startLineNumber,
+                        column: startIndex - startLineIndex
+                    },
+                    end: {
+                        line: lastLineNumber,
+                        column: lastIndex - lastLineIndex
+                    }
+                };
+            }
+
+            return object;
+        };
+    }
+
+    // Copy the range or location of a bit of syntax from the
+    // originating token
+    function finishUsingToken(syntax, token) {
+        if (trackingRange) {
+            syntax.range = token.range;
+        }
+        if (trackingLoc) {
+            syntax.loc = token.loc;
+        }
+    }
+
     // Return the next character and move forward.
 
     function nextChar() {
         var ch = '\x00',
             idx = index;
+
         if (idx < length) {
             ch = source[idx];
             index += 1;
@@ -248,6 +308,7 @@ parseStatement: true, visitPostorder: true */
                 if (isLineTerminator(ch)) {
                     lineComment = false;
                     lineNumber += 1;
+                    lineIndex = index + 1;
                 }
             } else if (blockComment) {
                 nextChar();
@@ -259,6 +320,7 @@ parseStatement: true, visitPostorder: true */
                     }
                 } else if (isLineTerminator(ch)) {
                     lineNumber += 1;
+                    lineIndex = index + 1;
                 }
             } else if (ch === '/') {
                 ch = source[index + 1];
@@ -278,6 +340,7 @@ parseStatement: true, visitPostorder: true */
             } else if (isLineTerminator(ch)) {
                 nextChar();
                 lineNumber += 1;
+                lineIndex = index;
             } else {
                 break;
             }
@@ -285,7 +348,11 @@ parseStatement: true, visitPostorder: true */
     }
 
     function scanIdentifier() {
-        var ch, id;
+        var ch, id, token, finish;
+
+        if (tracking) {
+            finish = start();
+        }
 
         ch = source[index];
         if (!isIdentifierStart(ch)) {
@@ -304,40 +371,60 @@ parseStatement: true, visitPostorder: true */
         // There is no keyword or literal with only one character.
         // Thus, it must be an identifier.
         if (id.length === 1) {
-            return {
+            token = {
                 type: Token.Identifier,
                 value: id
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         if (isKeyword(id)) {
-            return {
+            token = {
                 type: Token.Keyword,
                 value: id
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         // 7.8.1 Null Literals
 
         if (id === 'null') {
-            return {
+            token = {
                 type: Token.NullLiteral
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         // 7.8.2 Boolean Literals
 
         if (id === 'true' || id === 'false') {
-            return {
+            token = {
                 type: Token.BooleanLiteral,
                 value: id
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
-        return {
+        token = {
             type: Token.Identifier,
             value: id
         };
+        if (tracking) {
+            finish(token);
+        }
+        return token;
     }
 
     // 7.7 Punctuators
@@ -346,24 +433,38 @@ parseStatement: true, visitPostorder: true */
         var ch1 = source[index],
             ch2,
             ch3,
-            ch4;
+            ch4,
+            token,
+            finish;
+
+        if (tracking) {
+            finish = start();
+        }
 
         // Check for most common single-character punctuators.
 
         if (ch1 === ';' || ch1 === '{' || ch1 === '}') {
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: ch1
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         if (ch1 === ',' || ch1 === '(' || ch1 === ')') {
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: ch1
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         // Dot (.) can also start a floating-point number, hence the need
@@ -371,10 +472,14 @@ parseStatement: true, visitPostorder: true */
 
         ch2 = source[index + 1];
         if (ch1 === '.' && !isDecimalDigit(ch2)) {
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: nextChar()
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         // Peek more characters.
@@ -390,10 +495,14 @@ parseStatement: true, visitPostorder: true */
                 nextChar();
                 nextChar();
                 nextChar();
-                return {
+                token = {
                     type: Token.Punctuator,
                     value: '>>>='
                 };
+                if (tracking) {
+                    finish(token);
+                }
+                return token;
             }
         }
 
@@ -403,50 +512,70 @@ parseStatement: true, visitPostorder: true */
             nextChar();
             nextChar();
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: '==='
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         if (ch1 === '!' && ch2 === '=' && ch3 === '=') {
             nextChar();
             nextChar();
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: '!=='
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         if (ch1 === '>' && ch2 === '>' && ch3 === '>') {
             nextChar();
             nextChar();
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: '>>>'
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         if (ch1 === '<' && ch2 === '<' && ch3 === '=') {
             nextChar();
             nextChar();
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: '<<='
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         if (ch1 === '>' && ch2 === '>' && ch3 === '=') {
             nextChar();
             nextChar();
             nextChar();
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: '>>='
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
 
         // 2-character punctuators: <= >= == != ++ -- << >> && ||
@@ -456,10 +585,14 @@ parseStatement: true, visitPostorder: true */
             if ('<>=!+-*%&|^/'.indexOf(ch1) >= 0) {
                 nextChar();
                 nextChar();
-                return {
+                token = {
                     type: Token.Punctuator,
                     value: ch1 + ch2
                 };
+                if (tracking) {
+                    finish(token);
+                }
+                return token;
             }
         }
 
@@ -467,27 +600,39 @@ parseStatement: true, visitPostorder: true */
             if ('+-<>&|'.indexOf(ch2) >= 0) {
                 nextChar();
                 nextChar();
-                return {
+                token = {
                     type: Token.Punctuator,
                     value: ch1 + ch2
                 };
+                if (tracking) {
+                    finish(token);
+                }
+                return token;
             }
         }
 
         // The remaining 1-character punctuators.
 
         if ('[]<>+-*%&|^!~?:=/'.indexOf(ch1) >= 0) {
-            return {
+            token = {
                 type: Token.Punctuator,
                 value: nextChar()
             };
+            if (tracking) {
+                finish(token);
+            }
+            return token;
         }
     }
 
     // 7.8.3 Numeric Literals
 
     function scanNumericLiteral() {
-        var number, ch;
+        var number, ch, token, finish;
+
+        if (tracking) {
+            finish = start();
+        }
 
         ch = source[index];
         if (!isDecimalDigit(ch) && (ch !== '.')) {
@@ -509,10 +654,14 @@ parseStatement: true, visitPostorder: true */
                     }
                     number += nextChar();
                 }
-                return {
+                token = {
                     type: Token.NumericLiteral,
                     value: parseInt(number, 16)
                 };
+                if (tracking) {
+                    finish(token);
+                }
+                return token;
             }
 
             while (index < length) {
@@ -552,21 +701,29 @@ parseStatement: true, visitPostorder: true */
                 if (index >= length) {
                     ch = '<end>';
                 }
-                throwError(Messages.UnexpectedToken, lineNumber, 'ILLEGAL');
+                throwError(Messages.UnexpectedToken, 'ILLEGAL');
             }
         }
 
-        return {
+        token = {
             type: Token.NumericLiteral,
             value: parseFloat(number)
         };
+        if (tracking) {
+            finish(token);
+        }
+        return token;
     }
 
     // 7.8.4 String Literals
 
     // TODO Unicode
     function scanStringLiteral() {
-        var str = '', quote, ch;
+        var str = '', quote, ch, token, finish;
+
+        if (tracking) {
+            finish = start();
+        }
 
         quote = source[index];
         if (quote !== '\'' && quote !== '"') {
@@ -592,20 +749,35 @@ parseStatement: true, visitPostorder: true */
         }
 
         if (quote !== '') {
-            throwError(Messages.UnexpectedToken, lineNumber, 'ILLEGAL');
+            throwError(Messages.UnexpectedToken, 'ILLEGAL');
         }
 
-        return {
+        token = {
             type: Token.StringLiteral,
             value: str
         };
+        if (tracking) {
+            finish(token);
+        }
+        return token;
     }
 
     function scanRegExp() {
-        var str = '', ch, pattern, flags, value, classMarker = false;
+        var str = '',
+            ch,
+            pattern,
+            flags,
+            value,
+            classMarker = false,
+            token,
+            finish;
 
         buffer = null;
         skipComment();
+
+        if (tracking) {
+            finish = start();
+        }
 
         ch = source[index];
         if (ch !== '/') {
@@ -631,7 +803,7 @@ parseStatement: true, visitPostorder: true */
                     classMarker = true;
                 }
                 if (isLineTerminator(ch)) {
-                    throwError(Messages.UnterminatedRegExp, lineNumber);
+                    throwError(Messages.UnterminatedRegExp);
                 }
             }
         }
@@ -652,13 +824,18 @@ parseStatement: true, visitPostorder: true */
         try {
             value = new RegExp(pattern, flags);
         } catch (e) {
-            throwError(Messages.InvalidRegExp, lineNumber);
+            throwError(Messages.InvalidRegExp);
         }
 
-        return {
+        token = {
+            // XXX should there be a type for this?
             literal: str,
             value: value
         };
+        if (tracking) {
+            finish(token);
+        }
+        return token;
     }
 
     function advance() {
@@ -690,15 +867,16 @@ parseStatement: true, visitPostorder: true */
             return token;
         }
 
-        throwError(Messages.UnexpectedToken, lineNumber, 'ILLEGAL');
+        throwError(Messages.UnexpectedToken, 'ILLEGAL');
     }
 
     function lex() {
-        var pos, token;
+        var token, initialIndex, initialLineNumber, initialLineIndex;
 
         if (buffer) {
-            index = buffer.range[1];
-            lineNumber = buffer.lineNumber;
+            index = buffer.finalIndex;
+            lineNumber = buffer.finalLineNumber;
+            lineIndex = buffer.finalLineIndex;
             token = buffer;
             buffer = null;
             return token;
@@ -707,52 +885,82 @@ parseStatement: true, visitPostorder: true */
         buffer = null;
         skipComment();
 
-        pos = index;
+        initialIndex = index;
+        initialLineIndex = lineIndex;
+        initialLineNumber = lineNumber;
+
         token = advance();
-        token.range = [pos, index];
-        token.lineNumber = lineNumber;
+
+        token.index = initialIndex;
+        token.lineIndex = initialLineIndex;
+        token.lineNumber = initialLineNumber;
+
+        lastToken = token;
 
         return token;
     }
 
     function lookahead() {
-        var pos, line, token;
+        var token, tempIndex, tempLineIndex, tempLineNumber;
 
         if (buffer !== null) {
             return buffer;
         }
 
-        pos = index;
-        line = lineNumber;
+        tempIndex = index;
+        tempLineIndex = lineIndex;
+        tempLineNumber = lineNumber;
+
+        lookingAhead = true;
         token = lex();
-        index = pos;
-        lineNumber = line;
+        lookingAhead = false;
+
+        token.finalIndex = index;
+        token.finalLineIndex = lineIndex;
+        token.finalLineNumber = lineNumber;
+
+        index = tempIndex;
+        lineIndex = tempLineIndex;
+        lineNumber = tempLineNumber;
 
         buffer = token;
+
         return buffer;
     }
 
     // Return true if there is a line terminator before the next token.
 
     function peekLineTerminator() {
-        var pos, line, found;
+        var tempIndex, tempLineNumber, tempLineIndex, found;
 
-        pos = index;
-        line = lineNumber;
+        tempIndex = index;
+        tempLineNumber = lineNumber;
+        tempLineIndex = lineIndex;
+
         skipComment();
-        found = lineNumber !== line;
-        index = pos;
-        lineNumber = line;
+
+        found = lineNumber !== tempLineNumber;
+
+        index = tempIndex;
+        lineNumber = tempLineNumber;
+        lineIndex = tempLineIndex;
 
         return found;
     }
 
     // Throw an exception
 
-    function throwError(message, line) {
-        var args = Array.prototype.slice.call(arguments, 2);
-        throw new Error('Line ' + line + ': ' + message.replace(/%(\d)/g,
-                    function (whole, index) { return args[index] || ''; }));
+    function throwError(messageFormat) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        throw new Error(
+            'Line ' + lineNumber +
+            ': ' + messageFormat.replace(
+                /%(\d)/g,
+                function (whole, index) {
+                    return args[index] || '';
+                }
+            )
+        );
     }
 
     // Throw an exception because of the token.
@@ -761,30 +969,30 @@ parseStatement: true, visitPostorder: true */
         var s;
 
         if (token.type === Token.EOF) {
-            throwError(Messages.UnexpectedEOS, lineNumber);
+            throwError(Messages.UnexpectedEOS);
         }
 
         if (token.type === Token.NumericLiteral) {
-            throwError(Messages.UnexpectedNumber, lineNumber);
+            throwError(Messages.UnexpectedNumber);
         }
 
         if (token.type === Token.StringLiteral) {
-            throwError(Messages.UnexpectedString, lineNumber);
+            throwError(Messages.UnexpectedString);
         }
 
         if (token.type === Token.Identifier) {
-            throwError(Messages.UnexpectedIdentifier, lineNumber);
+            throwError(Messages.UnexpectedIdentifier);
         }
 
         if (token.type === Token.Keyword) {
-            throwError(Messages.UnexpectedReserved, lineNumber);
+            throwError(Messages.UnexpectedReserved, token.value);
         }
 
         s = token.value;
         if (s.length > 10) {
             s = s.substr(0, 10) + '...';
         }
-        throwError(Messages.UnexpectedToken, lineNumber, s);
+        throwError(Messages.UnexpectedToken, s);
     }
 
     // Expect the next token to match the specified punctuator.
@@ -844,7 +1052,6 @@ parseStatement: true, visitPostorder: true */
             op === '|=';
     }
 
-
     // Return true if expr is left hand side expression
 
     function isLeftHandSide(expr) {
@@ -854,9 +1061,8 @@ parseStatement: true, visitPostorder: true */
             expr.type === Syntax.NewExpression;
     }
 
-
     function consumeSemicolon() {
-        var token, line;
+        var token, sameLineNumber;
 
         // Catch the very common case first.
         if (source[index] === ';') {
@@ -864,9 +1070,9 @@ parseStatement: true, visitPostorder: true */
             return;
         }
 
-        line = lineNumber;
+        sameLineNumber = lineNumber;
         skipComment();
-        if (lineNumber !== line) {
+        if (lineNumber !== sameLineNumber) {
             return;
         }
 
@@ -885,8 +1091,12 @@ parseStatement: true, visitPostorder: true */
     // 11.1.4 Array Initialiser
 
     function parseArrayInitialiser() {
-        var elements = [],
-            undef;
+        var elements = [], undef, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expect('[');
 
@@ -911,21 +1121,38 @@ parseStatement: true, visitPostorder: true */
             }
         }
 
-        return {
+        syntax = {
             type: Syntax.ArrayExpression,
             elements: elements
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 11.1.5 Object Initialiser
 
     function parseObjectInitialiser() {
-        var token, expr, properties = [], property;
+        var token,
+            expr,
+            properties = [],
+            property,
+            finish,
+            nestedFinish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expect('{');
 
         // TODO handle 'get' and 'set'
         while (index < length) {
+            nestedFinish = start();
             token = lex();
             if (token.type === Token.Punctuator && token.value === '}') {
                 break;
@@ -938,6 +1165,9 @@ parseStatement: true, visitPostorder: true */
                     type: Syntax.Identifier,
                     name: token.value
                 };
+                if (tracking) {
+                    finishUsingToken(property.key, token);
+                }
 
                 // Property Assignment: Getter and Setter.
 
@@ -961,6 +1191,10 @@ parseStatement: true, visitPostorder: true */
                         },
                         kind: 'get'
                     };
+                    if (tracking) {
+                        finishUsingToken(property.key, token);
+                        nestedFinish(property.value);
+                    }
                     break;
                 }
 
@@ -973,6 +1207,9 @@ parseStatement: true, visitPostorder: true */
                         type: Syntax.Identifier,
                         name: token.value
                     };
+                    if (tracking) {
+                        finishUsingToken(property.key, token);
+                    }
                     expect('(');
                     token = lex();
                     if (token.type !== Token.Identifier) {
@@ -988,6 +1225,10 @@ parseStatement: true, visitPostorder: true */
                         }],
                         body: parseBlock()
                     };
+                    if (tracking) {
+                        nestedFinish(property.value);
+                        finishUsingToken(property.value.params[0], token);
+                    }
                     property.kind = 'set';
                     break;
                 }
@@ -1002,6 +1243,9 @@ parseStatement: true, visitPostorder: true */
                     type: Syntax.Literal,
                     value: token.value
                 };
+                if (tracking) {
+                    finishUsingToken(property.key, token);
+                }
                 expect(':');
                 property.value = parseAssignmentExpression();
                 break;
@@ -1019,10 +1263,16 @@ parseStatement: true, visitPostorder: true */
             expect(',');
         }
 
-        return {
+        token = {
             type: Syntax.ObjectExpression,
             properties: properties
         };
+
+        if (tracking) {
+            finish(token);
+        }
+
+        return token;
     }
 
     // 11.1 Primary Expressions
@@ -1057,47 +1307,72 @@ parseStatement: true, visitPostorder: true */
         }
 
         if (match('/') || match('/=')) {
-            return {
+            token = scanRegExp();
+            expr = {
                 type: Syntax.Literal,
-                value: scanRegExp().value
+                value: token.value
             };
+            if (tracking) {
+                finishUsingToken(expr, token);
+            }
+            return expr;
         }
 
         token = lex();
 
         if (token.type === Token.Identifier) {
-            return {
+            expr = {
                 type: Syntax.Identifier,
                 name: token.value
             };
+            if (tracking) {
+                finishUsingToken(expr, token);
+            }
+            return expr;
         }
 
         if (token.type === Token.BooleanLiteral) {
-            return {
+            expr ={
                 type: Syntax.Literal,
                 value: (token.value === 'true')
             };
+            if (tracking) {
+                finishUsingToken(expr, token);
+            }
+            return expr;
         }
 
         if (token.type === Token.NullLiteral) {
-            return {
+            expr = {
                 type: Syntax.Literal,
                 value: null
             };
+            if (tracking) {
+                finishUsingToken(expr, token);
+            }
+            return expr;
         }
 
         if (token.type === Token.NumericLiteral) {
-            return {
+            expr = {
                 type: Syntax.Literal,
                 value: token.value
             };
+            if (tracking) {
+                finishUsingToken(expr, token);
+            }
+            return expr;
         }
 
         if (token.type === Token.StringLiteral) {
-            return {
+            expr = {
                 type: Syntax.Literal,
                 value: token.value
             };
+            if (tracking) {
+                finishUsingToken(expr, token);
+            }
+            return expr;
         }
 
         return throwUnexpected(token);
@@ -1130,7 +1405,12 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parseMemberExpression() {
-        var expr, token, property;
+        var expr, token, property, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expr = parsePrimaryExpression();
 
@@ -1151,25 +1431,35 @@ parseStatement: true, visitPostorder: true */
                     object: expr,
                     property: property
                 };
+                if (tracking) {
+                    finishUsingToken(property, token);
+                    finish(expr);
+                }
             } else if (match('[')) {
                 lex();
                 property = parseExpression();
                 if (property.type === Syntax.ExpressionStatement) {
                     property = property.expression;
                 }
+                expect(']');
                 expr = {
                     type: Syntax.MemberExpression,
                     computed: true,
                     object: expr,
                     property: property
                 };
-                expect(']');
+                if (tracking) {
+                    finish(expr);
+                }
             } else if (match('(')) {
                 expr = {
                     type: Syntax.CallExpression,
                     callee: expr,
                     'arguments': parseArguments()
                 };
+                if (tracking) {
+                    finish(expr);
+                }
             } else {
                 break;
             }
@@ -1179,7 +1469,12 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parseLeftHandSideExpression() {
-        var useNew, expr, args;
+        var useNew, expr, args, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         useNew = matchKeyword('new');
         if (useNew) {
@@ -1207,19 +1502,27 @@ parseStatement: true, visitPostorder: true */
                 expr = expr.callee;
             }
 
-            return {
+            syntax = {
                 type: Syntax.NewExpression,
                 callee: expr,
                 'arguments': args
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         if (typeof args !== 'undefined') {
-            return {
+            syntax = {
                 type: Syntax.CallExpression,
                 callee: expr,
                 'arguments': args
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         return expr;
@@ -1228,11 +1531,18 @@ parseStatement: true, visitPostorder: true */
     // 11.3 Postfix Expressions
 
     function parsePostfixExpression() {
-        var expr = parseLeftHandSideExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseLeftHandSideExpression();
 
         if ((match('++') || match('--')) && !peekLineTerminator()) {
             if (!isLeftHandSide(expr)) {
-                throwError(Messages.InvalidLHSInPostfixOp, lineNumber);
+                throwError(Messages.InvalidLHSInPostfixOp);
             }
             expr = {
                 type: Syntax.UpdateExpression,
@@ -1240,6 +1550,9 @@ parseStatement: true, visitPostorder: true */
                 argument: expr,
                 prefix: false
             };
+            if (tracking) {
+                finish(expr);
+            }
         }
 
         return expr;
@@ -1248,36 +1561,54 @@ parseStatement: true, visitPostorder: true */
     // 11.4 Unary Operators
 
     function parseUnaryExpression() {
-        var operator, expr;
+        var operator, expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
 
         if (match('++') || match('--')) {
             operator = lex().value;
             expr = parseUnaryExpression();
             if (!isLeftHandSide(expr)) {
-                throwError(Messages.InvalidLHSInPrefixOp, lineNumber);
+                throwError(Messages.InvalidLHSInPrefixOp);
             }
-            return {
+            expr = {
                 type: Syntax.UpdateExpression,
                 operator: operator,
                 argument: expr,
                 prefix: true
             };
+            if (tracking) {
+                finish(expr);
+            }
+            return expr;
         }
 
         if (match('+') || match('-') || match('~') || match('!')) {
-            return {
+            expr = {
                 type: Syntax.UnaryExpression,
                 operator: lex().value,
                 argument: parseUnaryExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
+            return expr;
         }
 
         if (matchKeyword('delete') || matchKeyword('void') || matchKeyword('typeof')) {
-            return {
+            expr = {
                 type: Syntax.UnaryExpression,
                 operator: lex().value,
                 argument: parseUnaryExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
+            return expr;
         }
 
         return parsePostfixExpression();
@@ -1286,7 +1617,14 @@ parseStatement: true, visitPostorder: true */
     // 11.5 Multiplicative Operators
 
     function parseMultiplicativeExpression() {
-        var expr = parseUnaryExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseUnaryExpression();
 
         while (match('*') || match('/') || match('%')) {
             expr = {
@@ -1295,6 +1633,9 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseUnaryExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
         }
 
         return expr;
@@ -1303,7 +1644,14 @@ parseStatement: true, visitPostorder: true */
     // 11.6 Additive Operators
 
     function parseAdditiveExpression() {
-        var expr = parseMultiplicativeExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseMultiplicativeExpression();
 
         while (match('+') || match('-')) {
             expr = {
@@ -1312,6 +1660,10 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseMultiplicativeExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
@@ -1320,15 +1672,26 @@ parseStatement: true, visitPostorder: true */
     // 11.7 Bitwise Shift Operators
 
     function parseShiftExpression() {
-        var expr = parseAdditiveExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseAdditiveExpression();
 
         while (match('<<') || match('>>') || match('>>>')) {
-            expr =  {
+            expr = {
                 type: Syntax.BinaryExpression,
                 operator: lex().value,
                 left: expr,
                 right: parseAdditiveExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
@@ -1337,7 +1700,13 @@ parseStatement: true, visitPostorder: true */
     // 11.8 Relational Operators
 
     function parseRelationalExpression() {
-        var expr = parseShiftExpression();
+        var expr, finish;
+
+        if (tracking) {
+            finish = start();
+        }
+
+        expr = parseShiftExpression();
 
         if (match('<') || match('>') || match('<=') || match('>=')) {
             expr = {
@@ -1346,6 +1715,9 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseRelationalExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
         } else if (matchKeyword('in')) {
             lex();
             expr = {
@@ -1354,6 +1726,9 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseRelationalExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
         } else if (matchKeyword('instanceof')) {
             lex();
             expr = {
@@ -1362,6 +1737,9 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseRelationalExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
         }
 
         return expr;
@@ -1370,7 +1748,14 @@ parseStatement: true, visitPostorder: true */
     // 11.9 Equality Operators
 
     function parseEqualityExpression() {
-        var expr = parseRelationalExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseRelationalExpression();
 
         while (match('==') || match('!=') || match('===') || match('!==')) {
             expr = {
@@ -1379,6 +1764,9 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseRelationalExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
         }
 
         return expr;
@@ -1387,7 +1775,14 @@ parseStatement: true, visitPostorder: true */
     // 11.10 Binary Bitwise Operators
 
     function parseBitwiseANDExpression() {
-        var expr = parseEqualityExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseEqualityExpression();
 
         while (match('&')) {
             lex();
@@ -1397,13 +1792,24 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseEqualityExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
     }
 
     function parseBitwiseORExpression() {
-        var expr = parseBitwiseANDExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseBitwiseANDExpression();
 
         while (match('|')) {
             lex();
@@ -1413,13 +1819,24 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseBitwiseANDExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
     }
 
     function parseBitwiseXORExpression() {
-        var expr = parseBitwiseORExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseBitwiseORExpression();
 
         while (match('^')) {
             lex();
@@ -1429,6 +1846,10 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseBitwiseORExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
@@ -1437,7 +1858,14 @@ parseStatement: true, visitPostorder: true */
     // 11.11 Binary Logical Operators
 
     function parseLogicalANDExpression() {
-        var expr = parseBitwiseXORExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseBitwiseXORExpression();
 
         while (match('&&')) {
             lex();
@@ -1447,13 +1875,24 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseBitwiseXORExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
     }
 
     function parseLogicalORExpression() {
-        var expr = parseLogicalANDExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseLogicalANDExpression();
 
         while (match('||')) {
             lex();
@@ -1463,6 +1902,10 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseLogicalANDExpression()
             };
+            if (tracking) {
+                finish(expr);
+                finish = start();
+            }
         }
 
         return expr;
@@ -1471,7 +1914,14 @@ parseStatement: true, visitPostorder: true */
     // 11.12 Conditional Operator
 
     function parseConditionalExpression() {
-        var expr = parseLogicalORExpression();
+        var expr, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseLogicalORExpression();
 
         if (match('?')) {
             lex();
@@ -1482,6 +1932,9 @@ parseStatement: true, visitPostorder: true */
             expr.consequent = parseAssignmentExpression();
             expect(':');
             expr.alternate = parseAssignmentExpression();
+            if (tracking) {
+                finish(expr);
+            }
         }
 
         return expr;
@@ -1490,12 +1943,18 @@ parseStatement: true, visitPostorder: true */
     // 11.13 Assignment Operators
 
     function parseAssignmentExpression() {
+        var expr, finish;
 
-        var expr = parseConditionalExpression();
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseConditionalExpression();
 
         if (matchAssign()) {
             if (!isLeftHandSide(expr)) {
-                throwError(Messages.InvalidLHSInAssignment, lineNumber);
+                throwError(Messages.InvalidLHSInAssignment);
             }
             expr = {
                 type: Syntax.AssignmentExpression,
@@ -1503,6 +1962,9 @@ parseStatement: true, visitPostorder: true */
                 left: expr,
                 right: parseAssignmentExpression()
             };
+            if (tracking) {
+                finish(expr);
+            }
         }
 
         return expr;
@@ -1511,7 +1973,14 @@ parseStatement: true, visitPostorder: true */
     // 11.14 Comma Operator
 
     function parseExpression() {
-        var expr = parseAssignmentExpression();
+        var expr, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        expr = parseAssignmentExpression();
 
         if (match(',')) {
             expr = {
@@ -1526,12 +1995,20 @@ parseStatement: true, visitPostorder: true */
                 lex();
                 expr.expressions.push(parseAssignmentExpression());
             }
+
         }
 
-        return {
+        syntax = {
             type: Syntax.ExpressionStatement,
             expression: expr
         };
+
+        if (tracking) {
+            finish(expr);
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 12.1 Block
@@ -1555,7 +2032,12 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parseBlock() {
-        var block;
+        var block, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expect('{');
 
@@ -1563,16 +2045,25 @@ parseStatement: true, visitPostorder: true */
 
         expect('}');
 
-        return {
+        syntax = {
             type: Syntax.BlockStatement,
             body: block
         };
+        if (tracking) {
+            finish(syntax);
+        }
+        return syntax;
     }
 
     // 12.2 Variable Statement
 
     function parseVariableDeclaration() {
-        var token, id, init;
+        var token, id, init, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         token = lex();
         if (token.type !== Token.Identifier) {
@@ -1590,10 +2081,17 @@ parseStatement: true, visitPostorder: true */
             init = parseAssignmentExpression();
         }
 
-        return {
+        syntax = {
             id: id,
             init: init
         };
+
+        if (tracking) {
+            finishUsingToken(id, token);
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     function parseVariableDeclarationList() {
@@ -1611,48 +2109,82 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parseVariableStatement() {
-        var declarations;
+        var declarations, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('var');
 
         declarations = parseVariableDeclarationList();
 
-        consumeSemicolon();
-
-        return {
+        syntax = {
             type: Syntax.VariableDeclaration,
             declarations: declarations,
             kind: 'var'
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        consumeSemicolon();
+
+        return syntax;
     }
 
     // http://wiki.ecmascript.org/doku.php?id=harmony:let.
     // Warning: This is experimental and not in the specification yet.
 
     function parseLetStatement() {
-        var declarations;
+        var declarations, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('let');
 
         declarations = parseVariableDeclarationList();
 
-        consumeSemicolon();
-
-        return {
+        syntax = {
             type: Syntax.VariableDeclaration,
             declarations: declarations,
             kind: 'let'
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        consumeSemicolon();
+        return syntax;
     }
 
     // 12.3 Empty Statement
 
     function parseEmptyStatement() {
+        var syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
         expect(';');
 
-        return {
+        syntax = {
             type: Syntax.EmptyStatement
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 12.4 Expression Statement
@@ -1668,7 +2200,12 @@ parseStatement: true, visitPostorder: true */
     // 12.5 If statement
 
     function parseIfStatement() {
-        var test, consequent, alternate;
+        var test, consequent, alternate, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('if');
 
@@ -1687,18 +2224,29 @@ parseStatement: true, visitPostorder: true */
             alternate = null;
         }
 
-        return {
+        syntax = {
             type: Syntax.IfStatement,
             test: test,
             consequent: consequent,
             alternate: alternate
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 12.6 Iteration Statements
 
     function parseDoWhileStatement() {
-        var body, test;
+        var body, test, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('do');
 
@@ -1712,17 +2260,28 @@ parseStatement: true, visitPostorder: true */
 
         expect(')');
 
-        consumeSemicolon();
-
-        return {
+        syntax = {
             type: Syntax.DoWhileStatement,
             body: body,
             test: test
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        consumeSemicolon();
+
+        return syntax;
     }
 
     function parseWhileStatement() {
-        var test, body;
+        var test, body, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('while');
 
@@ -1734,15 +2293,26 @@ parseStatement: true, visitPostorder: true */
 
         body = parseStatement();
 
-        return {
+        syntax = {
             type: Syntax.WhileStatement,
             test: test,
             body: body
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     function parseForStatement() {
-        var kind, init, test, update, left, right, body;
+        var kind, init, test, update, left, right, body, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         init = test = update = null;
 
@@ -1761,6 +2331,10 @@ parseStatement: true, visitPostorder: true */
                     kind: kind
                 };
 
+                if (tracking) {
+                    finish(init);
+                }
+
                 if (matchKeyword('in')) {
                     lex();
                     left = init;
@@ -1777,7 +2351,7 @@ parseStatement: true, visitPostorder: true */
                     right = init.right;
                     init = null;
                     if (!isLeftHandSide(left)) {
-                        throwError(Messages.InvalidLHSInForIn, lineNumber);
+                        throwError(Messages.InvalidLHSInForIn);
                     }
                 } else {
                     expect(';');
@@ -1802,45 +2376,68 @@ parseStatement: true, visitPostorder: true */
         body = parseStatement();
 
         if (typeof left === 'undefined') {
-            return {
+            syntax = {
                 type: Syntax.ForStatement,
                 init: init,
                 test: test,
                 update: update,
                 body: body
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
-        return {
+        syntax = {
             type: Syntax.ForInStatement,
             left: left,
             right: right,
             body: body,
             each: false
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 12.7 The continue statement
 
     function parseContinueStatement() {
-        var token, label = null;
+        var token, label = null, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('continue');
 
         // Optimize the most common form: 'continue;'.
         if (source[index] === ';') {
             lex();
-            return {
+            syntax = {
                 type: Syntax.ContinueStatement,
                 label: null
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         if (peekLineTerminator()) {
-            return {
+            syntax = {
                 type: Syntax.ContinueStatement,
                 label: null
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         token = lookahead();
@@ -1850,20 +2447,34 @@ parseStatement: true, visitPostorder: true */
                 type: Syntax.Identifier,
                 name: token.value
             };
+            if (tracking) {
+                finishUsingToken(label, token);
+            }
+        }
+
+        syntax = {
+            type: Syntax.ContinueStatement,
+            label: label
+        };
+
+        if (tracking) {
+            finish(syntax);
         }
 
         consumeSemicolon();
 
-        return {
-            type: Syntax.ContinueStatement,
-            label: label
-        };
+        return syntax;
     }
 
     // 12.8 The break statement
 
     function parseBreakStatement() {
-        var token, label = null;
+        var token, label = null, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('break');
 
@@ -1890,20 +2501,34 @@ parseStatement: true, visitPostorder: true */
                 type: Syntax.Identifier,
                 name: token.value
             };
+            if (tracking) {
+                finishUsingToken(label, token);
+            }
+        }
+
+        syntax = {
+            type: Syntax.BreakStatement,
+            label: label
+        };
+
+        if (tracking) {
+            finish(syntax);
         }
 
         consumeSemicolon();
 
-        return {
-            type: Syntax.BreakStatement,
-            label: label
-        };
+        return syntax;
     }
 
     // 12.9 The return statement
 
     function parseReturnStatement() {
-        var token, argument = null;
+        var token, argument = null, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('return');
 
@@ -1911,19 +2536,27 @@ parseStatement: true, visitPostorder: true */
         if (source[index] === ' ') {
             if (isIdentifierStart(source[index + 1])) {
                 argument = parseExpression().expression;
-                consumeSemicolon();
-                return {
+                syntax = {
                     type: Syntax.ReturnStatement,
                     argument: argument
                 };
+                if (tracking) {
+                    finish(syntax);
+                }
+                consumeSemicolon();
+                return syntax;
             }
         }
 
         if (peekLineTerminator()) {
-            return {
+            syntax = {
                 type: Syntax.ReturnStatement,
                 argument: null
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         if (!match(';')) {
@@ -1933,18 +2566,29 @@ parseStatement: true, visitPostorder: true */
             }
         }
 
-        consumeSemicolon();
-
-        return {
+        syntax = {
             type: Syntax.ReturnStatement,
             argument: argument
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        consumeSemicolon();
+
+        return syntax;
     }
 
     // 12.10 The with statement
 
     function parseWithStatement() {
-        var object, body;
+        var object, body, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('with');
 
@@ -1956,18 +2600,23 @@ parseStatement: true, visitPostorder: true */
 
         body = parseStatement();
 
-        return {
+        syntax = {
             type: Syntax.WithStatement,
             object: object,
             body: body
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 12.10 The swith statement
 
     function parseSwitchConsequent() {
-        var consequent = [],
-            statement;
+        var consequent = [], statement;
 
         while (index < length) {
             if (match('}') || matchKeyword('default') || matchKeyword('case')) {
@@ -1984,7 +2633,20 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parseSwitchStatement() {
-        var discriminant, cases, test, consequent, statement;
+        var discriminant,
+            cases,
+            test,
+            consequent,
+            statement,
+            syntax,
+            finish,
+            nestedSyntax,
+            nestedFinish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('switch');
 
@@ -1998,10 +2660,14 @@ parseStatement: true, visitPostorder: true */
 
         if (match('}')) {
             lex();
-            return {
+            syntax = {
                 type: Syntax.SwitchStatement,
                 discriminant: discriminant
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         cases = [];
@@ -2009,6 +2675,9 @@ parseStatement: true, visitPostorder: true */
         while (index < length) {
             if (match('}')) {
                 break;
+            }
+            if (tracking) {
+                nestedFinish = start();
             }
 
             if (matchKeyword('default')) {
@@ -2020,51 +2689,90 @@ parseStatement: true, visitPostorder: true */
             }
             expect(':');
 
-            cases.push({
+            nestedSyntax = {
                 type: Syntax.SwitchCase,
                 test: test,
                 consequent: parseSwitchConsequent()
-            });
+            };
+
+            if (tracking) {
+                finish(nestedSyntax);
+            }
+
+            cases.push(nestedSyntax);
         }
 
         expect('}');
 
-        return {
+        syntax = {
             type: Syntax.SwitchStatement,
             discriminant: discriminant,
             cases: cases
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 12.13 The throw statement
 
     function parseThrowStatement() {
-        var argument;
+        var argument, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('throw');
 
         if (peekLineTerminator()) {
-            throwError(Messages.NewlineAfterThrow, lineNumber);
+            throwError(Messages.NewlineAfterThrow);
         }
 
         argument = parseExpression().expression;
 
-        consumeSemicolon();
-
-        return {
+        syntax = {
             type: Syntax.ThrowStatement,
             argument: argument
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        consumeSemicolon();
+
+        return syntax;
     }
 
     // 12.14 The try statement
 
     function parseTryStatement() {
-        var block, handlers = [], param, finalizer = null;
+        var block,
+            handlers = [],
+            param,
+            finalizer = null,
+            syntax,
+            finish,
+            nestedSyntax,
+            nestedFinish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('try');
 
         block = parseBlock();
+
+        if (tracking) {
+            nestedFinish = start();
+        }
 
         if (matchKeyword('catch')) {
             lex();
@@ -2074,12 +2782,16 @@ parseStatement: true, visitPostorder: true */
             }
             expect(')');
 
-            handlers.push({
+            nestedSyntax = {
                 type: Syntax.CatchClause,
                 param: param,
                 guard: null,
                 body: parseBlock()
-            });
+            };
+            if (tracking) {
+                nestedFinish(nestedSyntax);
+            }
+            handlers.push(nestedSyntax);
         }
 
         if (matchKeyword('finally')) {
@@ -2088,34 +2800,58 @@ parseStatement: true, visitPostorder: true */
         }
 
         if (handlers.length === 0 && !finalizer) {
-            throwError(Messages.NoCatchOrFinally, lineNumber);
+            throwError(Messages.NoCatchOrFinally);
         }
 
-        return {
+        syntax = {
             type: Syntax.TryStatement,
             block: block,
             handlers: handlers,
             finalizer: finalizer
         };
+        if (tracking) {
+            finish(syntax);
+        }
+        return syntax;
     }
 
     // 12.15 The debugger statement
 
     function parseDebuggerStatement() {
+        var syntax, finish;
+
+        if (tracking) {
+            skipComment();
+        }
+
+        finish = start();
+
         expectKeyword('debugger');
+
+        syntax = {
+            type: Syntax.DebuggerStatement
+        };
+
+        if (tracking) {
+            finish(syntax);
+        }
 
         consumeSemicolon();
 
-        return {
-            type: Syntax.DebuggerStatement
-        };
+        return syntax;
     }
 
     // 12 Statements
 
     function parseStatement() {
-        var token = lookahead(),
-            stat;
+        var token, stat, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        token = lookahead();
 
         if (token.type === Token.EOF) {
             return;
@@ -2173,23 +2909,31 @@ parseStatement: true, visitPostorder: true */
 
         if (stat.expression.type === Syntax.FunctionExpression) {
             if (stat.expression.id !== null) {
-                return {
+                syntax = {
                     type: Syntax.FunctionDeclaration,
                     id: stat.expression.id,
                     params: stat.expression.params,
                     body: stat.expression.body
                 };
+                if (tracking) {
+                    finish(syntax);
+                }
+                return syntax;
             }
         }
 
         // 12.12 Labelled Statements
         if ((stat.expression.type === Syntax.Identifier) && match(':')) {
             lex();
-            return {
+            syntax = {
                 type: Syntax.LabeledStatement,
                 label: stat.expression,
                 body: parseStatement()
             };
+            if (tracking) {
+                finish(syntax);
+            }
+            return syntax;
         }
 
         consumeSemicolon();
@@ -2200,7 +2944,12 @@ parseStatement: true, visitPostorder: true */
     // 13 Function Definition
 
     function parseFunctionDeclaration() {
-        var token, id = null, params = [], body;
+        var token, id = null, param, params = [], body, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('function');
 
@@ -2212,6 +2961,9 @@ parseStatement: true, visitPostorder: true */
             type: Syntax.Identifier,
             name: token.value
         };
+        if (tracking) {
+            finishUsingToken(id, token);
+        }
 
         expect('(');
 
@@ -2221,10 +2973,14 @@ parseStatement: true, visitPostorder: true */
                 if (token.type !== Token.Identifier) {
                     throwUnexpected(token);
                 }
-                params.push({
+                param = {
                     type: Syntax.Identifier,
                     name: token.value
-                });
+                };
+                if (tracking) {
+                    finishUsingToken(param, token);
+                }
+                params.push(param);
                 if (match(')')) {
                     break;
                 }
@@ -2236,16 +2992,25 @@ parseStatement: true, visitPostorder: true */
 
         body = parseBlock();
 
-        return {
+        syntax = {
             type: Syntax.FunctionDeclaration,
             id: id,
             params: params,
             body: body
         };
+        if (tracking) {
+            finish(syntax);
+        }
+        return syntax;
     }
 
     function parseFunctionExpression() {
-        var token, id = null, params = [], body;
+        var token, id = null, param, params = [], body, syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
 
         expectKeyword('function');
 
@@ -2258,6 +3023,9 @@ parseStatement: true, visitPostorder: true */
                 type: Syntax.Identifier,
                 name: token.value
             };
+            if (tracking) {
+                finishUsingToken(id, token);
+            }
         }
 
         expect('(');
@@ -2268,10 +3036,14 @@ parseStatement: true, visitPostorder: true */
                 if (token.type !== Token.Identifier) {
                     throwUnexpected(token);
                 }
-                params.push({
+                param = {
                     type: Syntax.Identifier,
                     name: token.value
-                });
+                };
+                if (tracking) {
+                    finishUsingToken(param, token);
+                }
+                params.push(param);
                 if (match(')')) {
                     break;
                 }
@@ -2283,12 +3055,18 @@ parseStatement: true, visitPostorder: true */
 
         body = parseBlock();
 
-        return {
+        syntax = {
             type: Syntax.FunctionExpression,
             id: id,
             params: params,
             body: body
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // 14 Program
@@ -2322,17 +3100,36 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parseProgram() {
-        return {
+        var syntax, finish;
+
+        if (tracking) {
+            skipComment();
+            finish = start();
+        }
+
+        syntax = {
             type: Syntax.Program,
             body: parseSourceElements()
         };
+
+        if (tracking) {
+            finish(syntax);
+        }
+
+        return syntax;
     }
 
     // The following functions are needed only when the option to preserve
     // the comments is active.
 
     function scanComment() {
-        var comment, ch, start, blockComment, lineComment;
+        var comment,
+            ch,
+            blockComment,
+            lineComment,
+            startIndex,
+            startLineIndex,
+            finish;
 
         comment = '';
         blockComment = false;
@@ -2346,11 +3143,20 @@ parseStatement: true, visitPostorder: true */
                 if (isLineTerminator(ch)) {
                     lineComment = false;
                     lineNumber += 1;
-                    extra.comments.push({
-                        range: [start, index - 1],
-                        type: 'Line',
-                        value: comment
-                    });
+                    lineIndex = index + 1;
+                    if (!lookingAhead) {
+                        comment = {
+                            type: 'Line',
+                            value: comment
+                        };
+                        if (tracking) {
+                            finish(comment);
+                            if (trackingRange) {
+                                comment.prefixLength = startIndex - startLineIndex;
+                            }
+                        }
+                        extra.comments.push(comment);
+                    }
                     comment = '';
                 } else {
                     comment += ch;
@@ -2364,25 +3170,38 @@ parseStatement: true, visitPostorder: true */
                         comment = comment.substr(0, comment.length - 1);
                         blockComment = false;
                         nextChar();
-                        extra.comments.push({
-                            range: [start, index - 1],
-                            type: 'Block',
-                            value: comment
-                        });
+                        if (!lookingAhead) {
+                            comment = {
+                                type: 'Block',
+                                value: comment
+                            };
+                            if (tracking) {
+                                finish(comment);
+                                if (trackingRange) {
+                                    comment.prefixLength = startIndex - startLineIndex;
+                                }
+                            }
+                            extra.comments.push(comment);
+                        }
                         comment = '';
                     }
                 } else if (isLineTerminator(ch)) {
                     lineNumber += 1;
+                    lineIndex = index + 1;
                 }
             } else if (ch === '/') {
                 ch = source[index + 1];
                 if (ch === '/') {
-                    start = index;
+                    startIndex = index;
+                    startLineIndex = lineIndex;
+                    finish = start();
                     nextChar();
                     nextChar();
                     lineComment = true;
                 } else if (ch === '*') {
-                    start = index;
+                    startIndex = index;
+                    startLineIndex = lineIndex;
+                    finish = start();
                     nextChar();
                     nextChar();
                     blockComment = true;
@@ -2394,17 +3213,17 @@ parseStatement: true, visitPostorder: true */
             } else if (isLineTerminator(ch)) {
                 nextChar();
                 lineNumber += 1;
+                lineIndex = index;
             } else {
                 break;
             }
         }
 
-        if (comment.length > 0) {
-            extra.comments.push({
-                range: [start, index],
+        if (!lookingAhead && comment.length > 0) {
+            extra.comments.push(finish({
                 type: (blockComment) ? 'Block' : 'Line',
                 value: comment
-            });
+            }));
         }
     }
 
@@ -2422,12 +3241,17 @@ parseStatement: true, visitPostorder: true */
         }
     }
 
-    function lexRange() {
-        var pos, token;
+    function lexWithAnnotations() {
+        var token,
+            extraToken,
+            initialIndex,
+            initialLineIndex,
+            initialLineNumber;
 
         if (buffer) {
-            index = buffer.range[1];
-            lineNumber = buffer.lineNumber;
+            index = buffer.finalIndex;
+            lineIndex = buffer.finalLineIndex;
+            lineNumber = buffer.finalLineNumber;
             token = buffer;
             buffer = null;
             return token;
@@ -2436,105 +3260,107 @@ parseStatement: true, visitPostorder: true */
         buffer = null;
         skipComment();
 
-        pos = index;
+        initialIndex = index;
+        initialLineIndex = lineIndex;
+        initialLineNumber = lineNumber;
+
         token = advance();
-        token.range = [pos, index];
-        token.lineNumber = lineNumber;
+
+        token.index = initialIndex;
+        token.lineIndex = initialLineIndex;
+        token.lineNumber = initialLineNumber;
 
         if (token.type !== Token.EOF) {
-            extra.tokens.push({
+            extraToken = {
                 type: tokenTypeAsString(token.type),
-                value: source.slice(pos, index),
-                range: [pos, index - 1]
-            });
+                value: source.slice(initialIndex, index)
+            };
+            if (trackingRange) {
+                extraToken.range = token.range;
+            }
+            if (trackingLoc) {
+                extraToken.loc = token.loc;
+            }
+            extra.tokens.push(extraToken);
         }
+
+        lastToken = token;
 
         return token;
     }
 
-    function scanRegExpRange() {
-        var pos, regex, token;
+    function scanRegExpWithAnnotations() {
+        var pos, regex, token, finish;
 
         skipComment();
 
+        finish = start();
         pos = index;
         regex = extra.scanRegExp();
 
         // Pop the previous token, which is likely '/' or '/='
-        if (extra.tokens.length > 0) {
-            token = extra.tokens[extra.tokens.length - 1];
-            if (token.range[0] === pos && token.type === 'Punctuator') {
-                if (token.value === '/' || token.value === '/=') {
+        if (lastToken) {
+            if (lastToken.index === pos && lastToken.type === Token.Punctuator) {
+                if (lastToken.value === '/' || lastToken.value === '/=') {
                     extra.tokens.pop();
                 }
             }
         }
 
-        extra.tokens.push({
+        extra.tokens.push(finish({
             type: 'RegularExpression',
-            value: regex.literal,
-            range: [pos, index - 1]
-        });
+            value: regex.literal
+        }));
 
         return regex;
     }
 
-    function parsePrimaryRange() {
-        var pos, node;
-
-        skipComment();
-        pos = index;
-        node = parsePrimary();
-        node.range = [pos, index - 1];
-        return node;
-    }
-
-    function processRange(program) {
-
-        function enclosed(a, b) {
-            if (a.hasOwnProperty('range') && b.hasOwnProperty('range')) {
-                return [a.range[0], b.range[1]];
-            }
-        }
-
-        visitPostorder(program, function (node) {
-            if (node.type === 'BinaryExpression') {
-                // Primary expression in a bracket, e.g. '(1 + 2)', already
-                // has the range info.
-                if (!node.hasOwnProperty('range')) {
-                    node.range = enclosed(node.left, node.right);
-                }
-            }
-            if (node.type === 'LogicalExpression') {
-                node.range = enclosed(node.left, node.right);
-            }
+    function postprocessCommentPrefix(program) {
+        program.comments.forEach(function (comment) {
+            var stop = comment.range[0];
+            var start = stop - comment.prefixLength;
+            comment.prefix = source.slice(start, stop);
         });
-        return program;
     }
 
     function patch(options) {
         extra = {};
+        tracking = false;
 
         if (typeof options.comment === 'boolean' && options.comment) {
             extra.skipComment = skipComment;
             skipComment = scanComment;
             extra.comments = [];
+            tracking = true;
         }
 
         if (typeof options.range === 'boolean' && options.range) {
-            extra.parsePrimaryExpression = parsePrimaryExpression;
-            parsePrimaryExpression = parsePrimaryRange;
+            extra.trackingRange = trackingRange;
+            trackingRange = true;
+            tracking = true;
+        }
+
+        if (typeof options.loc === 'boolean' && options.loc) {
+            extra.trackingLoc = trackingLoc;
+            trackingLoc = true;
+            tracking = true;
+        }
+
+        if (typeof options.source === 'string') {
+            extra.sourceName = sourceName;
+            sourceName = options.source;
         }
 
         if (typeof options.tokens === 'boolean' && options.tokens) {
             extra.lex = lex;
             extra.scanRegExp = scanRegExp;
 
-            lex = lexRange;
-            scanRegExp = scanRegExpRange;
+            lex = lexWithAnnotations;
+            scanRegExp = scanRegExpWithAnnotations;
 
             extra.tokens = [];
         }
+
     }
 
     function unpatch() {
@@ -2542,13 +3368,13 @@ parseStatement: true, visitPostorder: true */
             skipComment = extra.skipComment;
         }
 
-        if (typeof extra.parsePrimaryExpression === 'function') {
-            parsePrimaryExpression = extra.parsePrimaryExpression;
-        }
-
         if (typeof extra.lex === 'function') {
             lex = extra.lex;
         }
+
+        trackingRange = extra.trackingRange;
+        trackingLoc = extra.trackingLoc;
+        sourceName = extra.sourceName;
 
         if (typeof extra.scanRegExp === 'function') {
             scanRegExp = extra.scanRegExp;
@@ -2558,16 +3384,18 @@ parseStatement: true, visitPostorder: true */
     }
 
     function parse(code, opt) {
-        var options,
-            program;
+        var options, program;
 
         options = opt || {};
 
         source = code;
         index = 0;
+        lineIndex = 0;
         lineNumber = (source.length > 0) ? 1 : 0;
         length = source.length;
         buffer = null;
+        lastToken = null;
+        lookingAhead = false;
 
         patch(options);
         try {
@@ -2578,8 +3406,8 @@ parseStatement: true, visitPostorder: true */
             if (typeof extra.tokens !== 'undefined') {
                 program.tokens = extra.tokens;
             }
-            if (typeof options.range === 'boolean' && options.range) {
-                program = processRange(program);
+            if (options.commentPrefix) {
+                postprocessCommentPrefix(program);
             }
         } catch (e) {
             throw e;
@@ -2601,20 +3429,21 @@ parseStatement: true, visitPostorder: true */
         for (key in object) {
             if (object.hasOwnProperty(key)) {
                 child = object[key];
-                if (typeof child === 'object') {
+                if (typeof child === 'object' && child !== null) {
                     visitPreorder(child, f);
                 }
             }
         }
     }
 
+    // XXX this code is dead, was used in range postprocessing
     function visitPostorder(object, f) {
         var key, child;
 
         for (key in object) {
             if (object.hasOwnProperty(key)) {
                 child = object[key];
-                if (typeof child === 'object') {
+                if (typeof child === 'object' && child !== null) {
                     visitPostorder(child, f);
                 }
             }

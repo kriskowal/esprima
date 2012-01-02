@@ -37,8 +37,10 @@ data = {
                 expression: {
                     type: 'ThisExpression',
                     range: [0, 3]
-                }
+                },
+                range: [0, 3]
             }],
+            range: [0, 3],
             tokens: [{
                 type: 'Keyword',
                 value: 'this',
@@ -54,8 +56,10 @@ data = {
                     type: 'Literal',
                     value: 42,
                     range: [0, 1]
-                }
+                },
+                range: [0, 1]
             }],
+            range: [0, 1],
             tokens: [{
                 type: 'Numeric',
                 value: '42',
@@ -73,18 +77,24 @@ data = {
                     operator: '+',
                     left: {
                         type: 'Literal',
-                        value: 1
+                        value: 1,
+                        range: [1, 1]
                     },
                     right: {
                         type: 'Literal',
-                        value: 2
-                    }
+                        value: 2,
+                        range: [5, 5]
+                    },
+                    range: [1, 5]
                 },
                 right: {
                     type: 'Literal',
-                    value: 3
-                }
-            }
+                    value: 3,
+                    range: [11, 11]
+                },
+                range: [0, 11]
+            },
+            range: [0, 11]
         }
     },
 
@@ -106,9 +116,12 @@ data = {
                         type: 'ArrayExpression',
                         elements: [],
                         range: [4, 5]
-                    }
-                }
+                    },
+                    range: [0, 5]
+                },
+                range: [0, 5]
             }],
+            range: [0, 5],
             tokens: [{
                 type: 'Identifier',
                 value: 'x',
@@ -135,13 +148,17 @@ data = {
                 operator: '=',
                 left: {
                     type: 'Identifier',
-                    name: 'x'
+                    name: 'x',
+                    range: [0, 0]
                 },
                 right: {
                     type: 'ArrayExpression',
-                    elements: []
-                }
-            }
+                    elements: [],
+                    range: [4, 6]
+                },
+                range: [0, 6]
+            },
+            range: [0, 6]
         },
 
         'x = [ 42 ]': {
@@ -151,16 +168,21 @@ data = {
                 operator: '=',
                 left: {
                     type: 'Identifier',
-                    name: 'x'
+                    name: 'x',
+                    range: [0, 0]
                 },
                 right: {
                     type: 'ArrayExpression',
                     elements: [{
                         type: 'Literal',
-                        value: 42
-                    }]
-                }
-            }
+                        value: 42,
+                        range: [6, 7]
+                    }],
+                    range: [4, 9]
+                },
+                range: [0, 9]
+            },
+            range: [0, 9]
         },
 
         'x = [ 42, ]': {
@@ -170,16 +192,21 @@ data = {
                 operator: '=',
                 left: {
                     type: 'Identifier',
-                    name: 'x'
+                    name: 'x',
+                    range: [0, 0]
                 },
                 right: {
                     type: 'ArrayExpression',
                     elements: [{
                         type: 'Literal',
-                        value: 42
-                    }]
-                }
-            }
+                        value: 42,
+                        range: [6, 7]
+                    }],
+                    range: [4, 10]
+                },
+                range: [0, 10]
+            },
+            range: [0, 10]
         },
 
         'x = [ , 42 ]': {
@@ -570,7 +597,6 @@ data = {
                 }
             }],
             comments: [{
-                range: [0, 16],
                 type: 'Line',
                 value: ' Hello, world!'
             }]
@@ -582,17 +608,24 @@ data = {
                 type: 'ExpressionStatement',
                 expression: {
                     type: 'Literal',
-                    value: 42
-                }
+                    value: 42,
+                    range: [37, 38]
+                },
+                range: [37, 38]
             }],
+            range: [37, 38],
             comments: [{
+                type: 'Line',
+                value: ' Hello, world!',
                 range: [0, 16],
-                type: 'Line',
-                value: ' Hello, world!'
+                prefixLength: 0,
+                prefix: ""
             }, {
-                range: [18, 36],
                 type: 'Line',
-                value: '   Another hello'
+                value: '   Another hello',
+                range: [18, 36],
+                prefixLength: 0,
+                prefix: ""
             }]
         },
 
@@ -602,7 +635,8 @@ data = {
                 type: 'IfStatement',
                 test: {
                     type: 'Identifier',
-                    name: 'x'
+                    name: 'x',
+                    range: [4, 4]
                 },
                 consequent: {
                     type: 'BlockStatement',
@@ -612,18 +646,25 @@ data = {
                             type: 'CallExpression',
                             callee: {
                                 type: 'Identifier',
-                                name: 'doThat'
+                                name: 'doThat',
+                                range: [25, 30]
                             },
-                            'arguments': []
-                        }
-                    }]
+                            'arguments': [],
+                            range: [25, 32]
+                        },
+                        range: [25, 32]
+                    }],
+                    range: [7, 35]
                 },
-                alternate: null
+                alternate: null,
+                range: [0, 35]
             }],
+            range: [0, 35],
             comments: [{
-                range: [9, 24],
                 type: 'Line',
-                value: ' Some comment'
+                value: ' Some comment',
+                range: [9, 24],
+                prefixLength: 9
             }]
         },
 
@@ -633,13 +674,15 @@ data = {
                 type: 'SwitchStatement',
                 discriminant: {
                     type: 'Identifier',
-                    name: 'answer'
+                    name: 'answer',
+                    range: [8, 13],
                 },
                 cases: [{
                     type: 'SwitchCase',
                     test: {
                         type: 'Literal',
-                        value: 42
+                        value: 42,
+                        range: [23, 24]
                     },
                     consequent: [{
                         type: 'ExpressionStatement',
@@ -647,17 +690,167 @@ data = {
                             type: 'CallExpression',
                             callee: {
                                 type: 'Identifier',
-                                name: 'bingo'
+                                name: 'bingo',
+                                range: [41, 45]
                             },
-                            'arguments': []
-                        }
-                    }]
-                }]
+                            'arguments': [],
+                            range: [41, 47]
+                        },
+                        range: [41, 47]
+                    }],
+                    range: [0, 48]
+                }],
+                range: [0, 49]
             }],
+            range: [0, 49],
             comments: [{
-                range: [27, 39],
                 type: 'Block',
-                value: ' perfect '
+                value: ' perfect ',
+                range: [27, 39],
+                prefixLength: 27
+            }]
+        },
+
+        'var foo = function () {}\n/* comment */\nfunction bar() {}\n': {
+            type: 'Program',
+            body: [{
+                type: 'VariableDeclaration',
+                declarations: [{
+                    id: {
+                        type: 'Identifier',
+                        name: 'foo',
+                        loc: {
+                            start: { line: 1, column: 4 },
+                            end: { line: 1, column: 7 }
+                        }
+                    },
+                    init: {
+                        type: 'FunctionExpression',
+                        id: null,
+                        params: [],
+                        body: {
+                            type: 'BlockStatement',
+                            body: [],
+                            loc: {
+                                start: { line: 1, column: 22 },
+                                end: { line: 1, column: 24 }
+                            }
+                        },
+                        loc: {
+                            start: { line: 1, column: 10 },
+                            end: { line: 1, column: 24 }
+                        }
+                    },
+                    loc: {
+                        start: { line: 1, column: 4 },
+                        end: { line: 1, column: 24 }
+                    }
+                }],
+                kind: 'var',
+                loc: {
+                    start: { line: 1, column: 0 },
+                    end: { line: 1, column: 24 }
+                }
+            }, {
+                type: 'FunctionDeclaration',
+                id: {
+                    type: 'Identifier',
+                    name: 'bar',
+                    loc: {
+                        start: { line: 3, column: 9 },
+                        end: { line: 3, column: 12 }
+                    }
+                },
+                params: [],
+                body: {
+                    type: 'BlockStatement',
+                    body: [],
+                    loc: {
+                        start: { line: 3, column: 15 },
+                        end: { line: 3, column: 17 }
+                    }
+                },
+                loc: {
+                    start: { line: 3, column: 0 },
+                    end: { line: 3, column: 17 }
+                }
+            }],
+            loc: {
+                start: { line: 1, column: 0 },
+                end: { line: 3, column: 17 }
+            },
+            comments: [{
+                type: 'Block',
+                value: ' comment ',
+                //prefixLength: 0,
+                loc: {
+                    start: { line: 2, column: 0 },
+                    end: { line: 2, column: 13 }
+                }
+            }]
+        },
+
+        'function foo() {}\n/** comment */\nfunction bar() {}\n': {
+            type: 'Program',
+            body: [{
+                type: 'FunctionDeclaration',
+                id: {
+                    type: 'Identifier',
+                    name: 'foo',
+                    loc: {
+                        start: { line: 1, column: 9 },
+                        end: { line: 1, column: 12 }
+                    }
+                },
+                params: [],
+                body: {
+                    type: 'BlockStatement',
+                    body: [],
+                    loc: {
+                        start: { line: 1, column: 15 },
+                        end: { line: 1, column: 17 }
+                    }
+                },
+                loc: {
+                    start: { line: 1, column: 0, },
+                    end: { line: 1, column: 17 }
+                }
+            }, {
+                type: 'FunctionDeclaration',
+                id: {
+                    type: 'Identifier',
+                    name: 'bar',
+                    loc: {
+                        start: { line: 3, column: 9 },
+                        end: { line: 3, column: 12 }
+                    }
+                },
+                params: [],
+                body: {
+                    type: 'BlockStatement',
+                    body: [],
+                    loc: {
+                        start: { line: 3, column: 15 },
+                        end: { line: 3, column: 17 }
+                    }
+                },
+                loc: {
+                    start: { line: 3, column: 0, },
+                    end: { line: 3, column: 17 }
+                }
+            }],
+            loc: {
+                start: { line: 1, column: 0 },
+                end: { line: 3, column: 17 }
+            },
+            comments: [{
+                type: 'Block',
+                value: '* comment ',
+                //prefixLength: 0,
+                loc: {
+                    start: { line: 2, column: 0 },
+                    end: { line: 2, column: 14 }
+                }
             }]
         }
 
@@ -808,16 +1001,20 @@ data = {
                 declarations: [{
                     id: {
                         type: 'Identifier',
-                        name: 'x'
+                        name: 'x',
+                        range: [4, 4]
                     },
                     init: {
                         type: 'Literal',
                         value: '/[a-z]/i',
                         range: [8, 15]
-                    }
+                    },
+                    range: [4, 15]
                 }],
-                kind: 'var'
+                kind: 'var',
+                range: [0, 15]
             }],
+            range: [0, 15],
             tokens: [{
                 type: 'Keyword',
                 value: 'var',
@@ -844,16 +1041,20 @@ data = {
                 declarations: [{
                     id: {
                         type: 'Identifier',
-                        name: 'x'
+                        name: 'x',
+                        range: [4, 4]
                     },
                     init: {
                         type: 'Literal',
                         value: '/[P QR]/i',
                         range: [8, 16]
-                    }
+                    },
+                    range: [4, 16]
                 }],
-                kind: 'var'
+                kind: 'var',
+                range: [0, 16]
             }],
+            range: [0, 16],
             tokens: [{
                 type: 'Keyword',
                 value: 'var',
@@ -880,16 +1081,20 @@ data = {
                 declarations: [{
                     id: {
                         type: 'Identifier',
-                        name: 'x'
+                        name: 'x',
+                        range: [4, 4]
                     },
                     init: {
                         type: 'Literal',
                         value: '/foo\\/bar/',
                         range: [8, 17]
-                    }
+                    },
+                    range: [4, 17]
                 }],
-                kind: 'var'
+                kind: 'var',
+                range: [0, 17]
             }],
+            range: [0, 17],
             tokens: [{
                 type: 'Keyword',
                 value: 'var',
@@ -917,16 +1122,20 @@ data = {
                 declarations: [{
                     id: {
                         type: 'Identifier',
-                        name: 'x'
+                        name: 'x',
+                        range: [4, 4]
                     },
                     init: {
                         type: 'Literal',
                         value: '/=([^=\\s])+/g',
                         range: [8, 20]
-                    }
+                    },
+                    range: [4, 20]
                 }],
-                kind: 'var'
+                kind: 'var',
+                range: [0, 20]
             }],
+            range: [0, 20],
             tokens: [{
                 type: 'Keyword',
                 value: 'var',
@@ -1424,7 +1633,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x / y': {
@@ -1443,7 +1653,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x % y': {
@@ -1462,7 +1673,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         }
     },
 
@@ -1484,7 +1696,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x - y': {
@@ -1503,7 +1716,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         }
     },
 
@@ -1525,7 +1739,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x >> y': {
@@ -1544,7 +1759,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x >>> y': {
@@ -1563,7 +1779,8 @@ data = {
                     range: [6, 6]
                 },
                 range: [0, 6]
-            }
+            },
+            range: [0, 6]
         }
     },
 
@@ -1585,7 +1802,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x > y': {
@@ -1604,7 +1822,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x <= y': {
@@ -1623,7 +1842,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x >= y': {
@@ -1642,7 +1862,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x in y': {
@@ -1661,7 +1882,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x instanceof y': {
@@ -1680,7 +1902,8 @@ data = {
                     range: [13, 13]
                 },
                 range: [0, 13]
-            }
+            },
+            range: [0, 13]
         }
     },
 
@@ -1702,7 +1925,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range:[0, 5]
         },
 
         'x != y': {
@@ -1721,7 +1945,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x === y': {
@@ -1740,7 +1965,8 @@ data = {
                     range: [6, 6]
                 },
                 range: [0, 6]
-            }
+            },
+            range: [0, 6]
         },
 
         'x !== y': {
@@ -1759,7 +1985,8 @@ data = {
                     range: [6, 6]
                 },
                 range: [0, 6]
-            }
+            },
+            range: [0, 6]
         }
     },
 
@@ -1781,7 +2008,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x ^ y': {
@@ -1800,7 +2028,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         },
 
         'x | y': {
@@ -1819,7 +2048,8 @@ data = {
                     range: [4, 4]
                 },
                 range: [0, 4]
-            }
+            },
+            range: [0, 4]
         }
     },
 
@@ -1851,7 +2081,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x - y + z': {
@@ -1880,7 +2111,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x + y - z': {
@@ -1909,7 +2141,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x - y - z': {
@@ -1938,7 +2171,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x + y * z': {
@@ -1967,7 +2201,8 @@ data = {
                     range: [4, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x + y / z': {
@@ -1996,7 +2231,8 @@ data = {
                     range: [4, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x - y % z': {
@@ -2025,7 +2261,8 @@ data = {
                     range: [4, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x * y * z': {
@@ -2054,7 +2291,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x * y / z': {
@@ -2083,7 +2321,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x * y % z': {
@@ -2112,7 +2351,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x % y * z': {
@@ -2141,7 +2381,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x << y << z': {
@@ -2170,7 +2411,8 @@ data = {
                     range: [10, 10]
                 },
                 range: [0, 10]
-            }
+            },
+            range: [0, 10]
         },
 
         'x | y | z': {
@@ -2199,7 +2441,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x & y & z': {
@@ -2228,7 +2471,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x ^ y ^ z': {
@@ -2257,7 +2501,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x & y | z': {
@@ -2286,7 +2531,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x | y ^ z': {
@@ -2315,7 +2561,8 @@ data = {
                     range: [8, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         },
 
         'x | y & z': {
@@ -2344,7 +2591,8 @@ data = {
                     range: [4, 8]
                 },
                 range: [0, 8]
-            }
+            },
+            range: [0, 8]
         }
     },
 
@@ -2366,7 +2614,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x && y': {
@@ -2385,7 +2634,8 @@ data = {
                     range: [5, 5]
                 },
                 range: [0, 5]
-            }
+            },
+            range: [0, 5]
         },
 
         'x || y || z': {
@@ -2414,7 +2664,8 @@ data = {
                     range: [10, 10]
                 },
                 range: [0, 10]
-            }
+            },
+            range: [0, 10]
         },
 
         'x && y && z': {
@@ -2443,7 +2694,8 @@ data = {
                     range: [10, 10]
                 },
                 range: [0, 10]
-            }
+            },
+            range: [0, 10]
         },
 
         'x || y && z': {
@@ -2472,7 +2724,8 @@ data = {
                     range: [5, 10]
                 },
                 range: [0, 10]
-            }
+            },
+            range: [0, 10]
         },
 
         'x || y ^ z': {
@@ -2501,7 +2754,8 @@ data = {
                     range: [5, 9]
                 },
                 range: [0, 9]
-            }
+            },
+            range: [0, 9]
         }
     },
 
@@ -2525,8 +2779,10 @@ data = {
                     type: 'Literal',
                     value: 2,
                     range: [8, 8]
-                }
-            }
+                },
+                range: [0, 8]
+            },
+            range: [0, 8]
         },
 
         'x && y ? 1 : 2': {
@@ -2557,8 +2813,10 @@ data = {
                     type: 'Literal',
                     value: 2,
                     range: [13, 13]
-                }
-            }
+                },
+                range: [0, 13]
+            },
+            range: [0, 13]
         }
     },
 
@@ -3313,7 +3571,8 @@ data = {
                     type: 'Literal',
                     value: 0,
                     range: [8, 8]
-                }
+                },
+                range: [4, 8]
             },
             test: {
                 type: 'BinaryExpression',
@@ -3338,11 +3597,14 @@ data = {
                     name: 'x',
                     range: [19, 19]
                 },
-                prefix: false
+                prefix: false,
+                range: [19, 21]
             },
             body: {
-                type: 'EmptyStatement'
-            }
+                type: 'EmptyStatement',
+                range: [23, 23]
+            },
+            range: [0, 23]
         },
 
         'for(x = 0; x < 42; x++) process(x);': {
@@ -3359,7 +3621,8 @@ data = {
                     type: 'Literal',
                     value: 0,
                     range: [8, 8]
-                }
+                },
+                range: [4, 8]
             },
             test: {
                 type: 'BinaryExpression',
@@ -3384,7 +3647,8 @@ data = {
                     name: 'x',
                     range: [19, 19]
                 },
-                prefix: false
+                prefix: false,
+                range: [19, 21]
             },
             body: {
                 type: 'ExpressionStatement',
@@ -3399,9 +3663,12 @@ data = {
                         type: 'Identifier',
                         name: 'x',
                         range: [32, 32]
-                    }]
-                }
-            }
+                    }],
+                    range: [24, 33]
+                },
+                range: [24, 33]
+            },
+            range: [0, 34]
         },
 
         'for(x in list) process(x);': {
@@ -3553,7 +3820,8 @@ data = {
                     range: [11, 11]
                 },
                 range: [7, 11]
-            }
+            },
+            range: [0, 11]
         }
 
     },
@@ -3784,7 +4052,8 @@ data = {
                     range: [10, 10]
                 },
                 range: [6, 10]
-            }
+            },
+            range: [0, 10]
         },
 
         'throw { message: "Error" }': {
@@ -4413,7 +4682,8 @@ data = {
             expression: {
                 type: 'ThisExpression',
                 range: [0, 3]
-            }
+            },
+            range: [0, 3]
         },
 
         '42': {
@@ -4422,7 +4692,8 @@ data = {
                 type: 'Literal',
                 value: 42,
                 range: [0, 1]
-            }
+            },
+            range: [0, 1]
         },
 
         '(1 + 2 ) * 3': {
@@ -4443,7 +4714,7 @@ data = {
                         value: 2,
                         range: [5, 5]
                     },
-                    range: [0, 7]
+                    range: [1, 5]
                 },
                 right: {
                     type: 'Literal',
@@ -4451,7 +4722,8 @@ data = {
                     range: [11, 11]
                 },
                 range: [0, 11]
-            }
+            },
+            range: [0, 11]
         },
 
         'x = [ 42, ]': {
@@ -4472,6 +4744,54 @@ data = {
                         range: [6, 7]
                     }],
                     range: [4, 10]
+                },
+                range: [0, 10]
+            },
+            range: [0, 10]
+        }
+
+    },
+
+    'Source locations': {
+
+        ';': {
+            type: 'Program',
+            body: [{
+                type: 'EmptyStatement',
+                loc: {
+                    start: {line: 1, column: 0},
+                    end: {line: 1, column: 1}
+                }
+            }],
+            loc: {
+                start: { line: 1, column: 0 },
+                end: { line: 1, column: 1 }
+            }
+        },
+
+        ';\n;\n': {
+            type: 'Program',
+            body: [{
+                type: 'EmptyStatement',
+                loc: {
+                    start: {line: 1, column: 0},
+                    end: {line: 1, column: 1}
+                }
+            }, {
+                type: 'EmptyStatement',
+                loc: {
+                    start: {line: 2, column: 0},
+                    end: {line: 2, column: 1}
+                }
+            }],
+            loc: {
+                start: {
+                    line: 1,
+                    column: 0
+                },
+                end: {
+                    line: 2,
+                    column: 1
                 }
             }
         }
@@ -4504,7 +4824,7 @@ data = {
 
         'a b;': 'Line 1: Unexpected identifier',
 
-        'a if;': 'Line 1: Unexpected reserved word',
+        'a if;': 'Line 1: Unexpected reserved word: if',
 
         'break 1;': 'Line 1: Unexpected number',
 
@@ -4528,7 +4848,9 @@ data = {
     }
 };
 
+
 if (typeof window !== 'undefined') {
+
     // Run all tests in a browser environment.
     runTests = function () {
         'use strict';
@@ -4641,17 +4963,24 @@ if (typeof window !== 'undefined') {
             options = {
                 comment: false,
                 range: false,
-                tokens: false
+                tokens: false,
+                loc: false,
+                commentPrefix: false
             };
 
-            options.comment = hasComment(syntax);
-            options.range = hasRange(syntax) && !options.comment;
-            options.tokens = hasTokens(syntax);
+            options.comment = !!syntax.comments;
+            options.range = !!syntax.range;
+            options.loc = !!syntax.loc;
+            options.tokens = !!syntax.tokens;
+            options.commentPrefix = syntax.comments &&
+                typeof syntax.comments[0].prefix === "string";
 
             expected = JSON.stringify(syntax, null, 4);
             try {
                 tree = esprima.parse(code, options);
-                tree = (options.comment || options.tokens) ? tree : tree.body[0];
+                if (syntax.type !== 'Program') {
+                    tree = tree.body[0];
+                }
                 actual = JSON.stringify(tree, adjustRegexLiteral, 4);
 
                 total += 1;
